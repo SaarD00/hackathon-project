@@ -4,6 +4,7 @@ import {
   nanoid,
   PayloadAction,
   EntityState,
+  current,
 } from "@reduxjs/toolkit";
 import type { Point } from "../viewport";
 
@@ -112,6 +113,9 @@ interface ShapesState {
   shapes: EntityState<Shape, string>;
   selected: SelectionMap;
   frameCounter: number;
+  past: { shapes: EntityState<Shape, string> }[];
+  future: { shapes: EntityState<Shape, string> }[];
+  lastSavedShapes: EntityState<Shape, string>;
 }
 
 const initialState: ShapesState = {
@@ -119,6 +123,9 @@ const initialState: ShapesState = {
   shapes: shapesAdapter.getInitialState(),
   selected: {},
   frameCounter: 0,
+  past: [],
+  future: [],
+  lastSavedShapes: shapesAdapter.getInitialState(),
 };
 
 const DEFAULTS = { stroke: "#ffff", strokeWidth: 2 as const };
@@ -413,6 +420,39 @@ const shapesSlice = createSlice({
       state.tool = action.payload.tool;
       state.selected = action.payload.selected;
       state.frameCounter = action.payload.frameCounter;
+      state.past = [];
+      state.future = [];
+      state.lastSavedShapes = action.payload.shapes;
+    },
+    commitHistory(state) {
+      const currentShapes = current(state.shapes);
+      const last = state.lastSavedShapes;
+      if (JSON.stringify(last) !== JSON.stringify(currentShapes)) {
+        state.past.push({ shapes: last });
+        if (state.past.length > 50) {
+          state.past.shift();
+        }
+        state.lastSavedShapes = currentShapes;
+        state.future = [];
+      }
+    },
+    undo(state) {
+      if (state.past.length > 0) {
+        state.future.push({ shapes: current(state.shapes) });
+        const previous = state.past.pop()!;
+        state.shapes = previous.shapes;
+        state.lastSavedShapes = previous.shapes;
+        state.selected = {};
+      }
+    },
+    redo(state) {
+      if (state.future.length > 0) {
+        state.past.push({ shapes: current(state.shapes) });
+        const next = state.future.pop()!;
+        state.shapes = next.shapes;
+        state.lastSavedShapes = next.shapes;
+        state.selected = {};
+      }
     },
   },
 });
@@ -436,6 +476,9 @@ export const {
   selectAll,
   deleteSelected,
   loadProject,
+  commitHistory,
+  undo,
+  redo,
 } = shapesSlice.actions;
 
 export default shapesSlice.reducer;

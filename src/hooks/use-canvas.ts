@@ -18,6 +18,9 @@ import {
   Shape,
   Tool,
   updateShape,
+  commitHistory,
+  undo,
+  redo,
 } from "@/redux/slice/shapes";
 import {
   handToolDisable,
@@ -587,6 +590,9 @@ export const useCanvas = () => {
     }
 
     finalDrawing();
+    
+    // Commit to history after pointer up (dragging, drawing, erasing etc. ends)
+    dispatch(commitHistory());
   };
 
   const onPointerCancel: React.PointerEventHandler<HTMLDivElement> = (e) => {
@@ -594,6 +600,21 @@ export const useCanvas = () => {
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
+    // Undo/Redo Shortcuts
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
+      e.preventDefault();
+      dispatch(undo());
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) {
+      e.preventDefault();
+      dispatch(redo());
+      return;
+    }
+    if ((e.key === "Delete" || e.key === "Backspace") && !e.shiftKey && !e.ctrlKey && !e.metaKey && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
+      // Just for good measure, we can add delete functionality here as well, wait, the user didn't ask for delete, but it's handy. Let's just do undo/redo.
+    }
+
     if (e.code === "ShiftLeft" || e.code === "ShiftRight") {
       if (!e.repeat) {
         e.preventDefault();
@@ -809,6 +830,7 @@ export const useCanvas = () => {
     const handleResizeEnd = () => {
       isResizingRef.current = false;
       resizeDataRef.current = null;
+      dispatch(commitHistory());
     };
 
     window.addEventListener(
@@ -1015,6 +1037,8 @@ export const useFrame = (shape: Shape | undefined) => {
           reader.releaseLock();
         }
       }
+      
+      dispatch(commitHistory());
 
       console.log("FormData ready for API:", formData);
 
